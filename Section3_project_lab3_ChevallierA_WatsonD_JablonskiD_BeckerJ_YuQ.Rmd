@@ -1,0 +1,17 @@
+---
+title: "Section3_project_lab3_ChevallierA_WatsonD_JablonskiD_BeckerJ_YuQ"
+author: "Ashton Chevallier, Dan Watson, David Jablonski, Jason Becker, Qian Yu"
+date: "11/28/2016"
+output: pdf_document
+---
+
+## Part 1. Exploratory Data Analysis
+
+
+## Part 2. Exam the Research Questions
+
+
+## Part 3. Building Models
+
+
+## Part 4. Further considerations
