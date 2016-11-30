@@ -7,6 +7,24 @@ output: pdf_document
 
 ## Part 1. Exploratory Data Analysis
 
+Load libraries, set path, and load data
+```{r 1.a summary, warning=FALSE, message=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(car)
+library(lmtest)
+library(sandwich)
+
+# Please adjust based on data file location
+setwd("/Users/qiayu01/Google Drive/MIDS/W271 Applied Regression and Time series analysis/w271_lab3_project_area/W271_Project/")
+getwd()
+
+housing_data = read.csv("AmesHousing_data_2010.csv")
+summary(housing_data)
+str(housing_data)
+dim(housing_data)
+```
 
 ## Part 2. Exam the Research Questions
 
