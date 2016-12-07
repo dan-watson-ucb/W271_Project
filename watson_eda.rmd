@@ -1,0 +1,476 @@
+---
+title: "EDA_1"
+author: "Dan Watson"
+date: "December 6, 2016"
+output: pdf_document
+---
+
+****************************************************************************
+#   Overall thoughts from EDA
+##  Lot.Frontage may be important, may be same as lot size- that variable not reviewed here.  Basements seem to matter- possible interaction term. Squarefootage seems to matter, do we have total sqft instead of separated by levels?  If so, probably just as valuable.  Pools and fences probably aren't important, we can expand upon this if necessary, but doesn't seem worth going much further with these.
+****************************************************************************
+
+# Prep
+## Load libraries
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(car)
+library(lmtest)
+library(sandwich)
+```
+
+## Set WD and read data
+```{r}
+
+housing_data <- read.csv("AmesHousing_data_2010.csv")
+```
+
+****************************************************************************
+#Variable Analysis
+
+## Variable: Lot.Frontage
+### Meaning: Linear feet of street connected to property.
+```{r}
+typeof(housing_data$Lot.Frontage)
+length(housing_data$Lot.Frontage)
+```
+### No missing values.
+```{r}
+table(housing_data$Lot.Frontage)
+hist(housing_data$Lot.Frontage)
+```
+### Not terribly skewed- slight R tail, could transform, but probably not necessary.
+```{r}
+summary(housing_data$Lot.Frontage)
+```
+### 51 NAs. Mean 68.79, median 70.  Range 21-152
+```{r}
+sum(is.na(housing_data$Lot.Frontage))
+```
+### Double checked NA calculation, should we use complete cases?
+```{r}
+cc<-complete.cases(housing_data)
+df2<-housing_data[cc, ]
+```
+
+### There are no complete cases at this point, seems that a lot of variables have no values- such as alley.  Can see if complete cases of our final variables makes sense to use.
+
+### Plot relationship
+```{r}
+plot(housing_data$Lot.Frontage, housing_data$SalePrice, main = "Sales Price Vs Lot.Frontage", col ="blue")
+abline(lm(SalePrice~Lot.Frontage, data= housing_data), col = "red")
+```
+### Does not seem to be a tight linear fit between the variables.
+
+### Simple linear model
+```{r}
+ModelFrontage <- lm(SalePrice~Lot.Frontage, data= housing_data)
+summary(ModelFrontage)
+plot(ModelFrontage)
+```
+### Statistically significant relationship.  QQ plot looks good until tail.  Seems like we have heteroskedasticity.
+```{r}
+coeftest(ModelFrontage, vcov= vcovHC)
+```
+### Appears significant, T value 4.3876, P 1.610e-05
+
+****************************************************************************
+## Variable: BsmtFinSF1
+### Meaning: SQFT of the basement type1
+### If we keep this variable, should probably be interaction term as this variable by itself won't provide much context.
+```{r}
+typeof(housing_data$BsmtFin.SF.1)
+length(housing_data$BsmtFin.SF.1)
+
+hist(housing_data$BsmtFin.SF.1)
+```
+### Note the huge number of 0s for basements
+```{r}
+table(housing_data$BsmtFin.SF.1)
+```
+### 92 properties have no basement, but concerned about values even through 104sqft- maybe a 10x10 room is considered a basement but what about 49sqft- 7x7, is that a basement?24sqft?  Where is the line?
+```{r}
+summary(housing_data$BsmtFin.SF.1)
+plot(housing_data$BsmtFin.SF.1, housing_data$SalePrice, col="blue", main = "SalesPrice v BsmtFin.SF.1")
+abline(lm(SalePrice~ BsmtFin.SF.1, data= housing_data), col ="red")
+```
+### There seems to be some relationship, not tightly fitted. I don't think it makes sense at this time to do an analysis of this as a linear model until we decide if we want to explore basements at all due to the limited number of responses.  If kept, we should create an interaction term with sqft of types.
+
+****************************************************************************
+## Variable: BsmtFinSF2
+### Meaning: Similar to the variable above, this is the sqft for the second type of basement.  Example- if a home has a half finished and half unfinished basement, this will give the sqft of the second type of basement.
+```{r}
+typeof(housing_data$BsmtFin.SF.2)
+length(housing_data$BsmtFin.SF.2)
+table(housing_data$BsmtFin.SF.2)
+```
+### We see the same issue here with the size. Maybe the small sizes make sense if one room unfinished or a small area where water heater/furnace located unfinished?
+
+```{r}
+hist(housing_data$BsmtFin.SF.2)
+```
+### The vast majority of houses don't have two different types of basements in the same home.
+
+### Considering the size issues in BsmtFin.SF.1, are there any basements where basement 1 is smaller than basement2?
+```{r}
+sum(housing_data$BsmtFin.SF.2> housing_data$BsmtFin.SF.1)
+```
+### we have 23 basements where the second type is larger than the first.  lets explore total bsmt size for these.
+```{r}
+df3<-housing_data$Total.Bsmt.SF[housing_data$BsmtFin.SF.2> housing_data$BsmtFin.SF.1]
+table(df3)
+```
+### All of these sizes make sense, so maybe we don't have an issues
+```{r}
+table(housing_data$Total.Bsmt.SF)
+```
+### Looking at total, the smallest bsmt is 346 sqft, so it is more of a classification issue than a problem in the data.
+
+### Overall recommendation, consider interaction terms if we want to consider effect of a basement.
+
+****************************************************************************
+## Variable: BSMT Unf SF
+### Meaning: Total unfinished sqft of basement
+```{r}
+typeof(housing_data$Bsmt.Unf.SF)
+length(housing_data$Bsmt.Unf.SF)
+table(housing_data$Bsmt.Unf.SF)
+```
+### only 28 homes with 0sqft of unfinished basement, some are very small, but could be for utility room.
+```{r}
+hist(housing_data$Bsmt.Unf.SF)
+```
+### Expectedly we have a right skew to this variable.
+```{r}
+hist(log10(housing_data$Bsmt.Unf.SF))
+```
+### Log gets us closer to a nml distribution if we want to use this variable.
+
+```{r}
+plot(housing_data$Bsmt.Unf.SF, housing_data$SalePrice, main = "SalePrice vs Bsmt.Unf.SF", col = "blue")
+abline(lm(SalePrice~ Bsmt.Unf.SF, data= housing_data), col ="red")
+```
+### Appears to be a slightly positive relationship
+```{r}
+plot(log(housing_data$Bsmt.Unf.SF), housing_data$SalePrice, main = "SalePrice vs Bsmt.Unf.SF", col = "blue")
+```
+
+****************************************************************************
+## Variable: Total.Bsmt.SF
+### Meaning: Total sqft of basement
+```{r}
+typeof(housing_data$Total.Bsmt.SF)
+length(housing_data$Total.Bsmt.SF)
+table(housing_data$Total.Bsmt.SF)
+```
+### only 7 homes have no basement, sizes here make sense.
+```{r}
+hist(housing_data$Total.Bsmt.SF)
+```
+### Have a slight R skew, imagine this distribution closely resembles total home sqft histogram.
+```{r}
+hist(log(housing_data$Total.Bsmt.SF))
+```
+### log transformation makes this much more normal
+
+```{r}
+plot(housing_data$Total.Bsmt.SF, housing_data$SalePrice, main = "SalePrice vs Total.Bsmt.SF", col = "blue")
+abline(lm(SalePrice~ Total.Bsmt.SF, data = housing_data), col = "red")
+```
+### Seems to be a linear relationship.
+```{r}
+plot(log(housing_data$Total.Bsmt.SF), housing_data$SalePrice, main = "SalePrice vs Total.Bsmt.SF", col = "blue")
+```
+
+```{r}
+ModelTotBsmtSF <- lm(SalePrice ~ Total.Bsmt.SF, data =housing_data)
+coeftest(ModelTotBsmtSF, vcov= vcovHC)
+```
+### statistically significant by self.
+```{r}
+plot(ModelTotBsmtSF)
+```
+## Some issues with the residuals v fitted at the extremes, but not a lot of values, looks good for majority of values.  QQ plot looks good, a little skew at the high end. Scale location also good in middle, but heteroskedastic at extremes. A couple values close to .5 Cook's distance, but none reach it.
+
+## Seems that bsmt sqft should be included.  Possbily basement type if interaction terms give good information
+
+****************************************************************************
+## Variable: x1st.Flr.SF
+### Meaning: Square footage of first floor
+### Note that R puts an X infront of numbers that start column names in housing_data
+
+```{r}
+typeof(housing_data$X1st.Flr.SF)
+length(housing_data$X1st.Flr.SF)
+table(housing_data$X1st.Flr.SF)
+```
+### smallest home has 372 sqft on first floor, this is small, but could make sense.
+```{r}
+hist(housing_data$X1st.Flr.SF)
+```
+
+### appears to be close to normally distributed, slight skew R.
+```{r}
+summary(housing_data$X1st.Flr.SF)
+```
+
+```{r}
+plot(housing_data$X1st.Flr.SF, housing_data$SalePrice, main="SalePrice vs 1st.Flr.SF", col="blue")
+abline(lm(SalePrice ~ X1st.Flr.SF, data= housing_data), col="red")
+```
+### Appears to be a strong linear relationship, which makes sense intuitively.
+
+```{r}
+Model1stFlrSqft <- lm(SalePrice ~ X1st.Flr.SF, data= housing_data)
+coeftest(Model1stFlrSqft, vcov = vcovHC)
+```
+### T 9.59 and P > 2e-16
+```{r}
+plot(Model1stFlrSqft)
+```
+### Some heteroskedasticity in residuals v fitted.  QQ plot good, but some variance at extremes.  How do we interpret the scale location? Residual v leverage okay, #45 still close to Cook's distance.  I'd imagine that this somewhat matters, but this is will closely correlated with total sqft.
+
+****************************************************************************
+## Variable: x2nd.Flr.SF
+### Meaning: Total square footage of second floor
+```{r}
+typeof(housing_data$X2nd.Flr.SF)
+length(housing_data$X2nd.Flr.SF)
+table(housing_data$X2nd.Flr.SF)
+```
+### 195 homes without a second floor.  Also, many have small second floor.
+```{r}
+hist(housing_data$X2nd.Flr.SF)
+```
+### Skewed due to many zeros.
+
+```{r}
+hist(housing_data$X2nd.Flr.SF[housing_data$X2nd.Flr.SF>0])
+```
+```{r}
+summary(housing_data$X2nd.Flr.SF)
+```
+### Mean 320, but median 0
+```{r}
+summary(housing_data$X2nd.Flr.SF[housing_data$X2nd.Flr.SF>0])
+```
+### Mean and median close for homes with a second floor, which is consistent with thoughts of being close to normally distributed.
+```{r}
+plot(housing_data$X2nd.Flr.SF, housing_data$SalePrice, main="SalePrice vs 2nd.Flr.SF", col="blue")
+abline(lm(SalePrice~X2nd.Flr.SF, data=housing_data), col = "red")
+```
+```{r}
+plot(housing_data$X2nd.Flr.SF[housing_data$X2nd.Flr.SF>0], housing_data$SalePrice[housing_data$X2nd.Flr.SF>0], main="SalePrice vs 2nd.Flr.SF", col="blue")
+abline(lm(SalePrice[housing_data$X2nd.Flr.SF>0]~X2nd.Flr.SF[housing_data$X2nd.Flr.SF>0], data=housing_data), col = "red")
+```
+### By removing the homes without a second floor, we see a somewhat linear relationship.
+```{r}
+Model2ndFlrSqft <- lm(SalePrice~X2nd.Flr.SF, data=housing_data)
+coeftest(Model2ndFlrSqft, vcov= vcovHC)
+```
+### Statistically significant at .01
+```{r}
+plot(Model2ndFlrSqft)
+```
+### Some issues in residuals v fitted.  QQ good between -1 and 1, then skews. Scale location also issue with heteroskedasticity.
+
+****************************************************************************
+## Variable: Low.Qual.Fin.SF
+### Meaning: Total square footage of low quality finish for all floors.
+```{r}
+typeof(housing_data$Low.Qual.Fin.SF)
+length(housing_data$Low.Qual.Fin.SF)
+table(housing_data$Low.Qual.Fin.SF)
+hist(housing_data$Low.Qual.Fin.SF)
+```
+### There are only two non-zero values.  No need to go further here.
+
+****************************************************************************
+## Variable: Pool Area
+### Meaning: Pool area in sqft, unclear if that means area around pool or just pool itself.
+```{r}
+typeof(housing_data$Pool.Area)
+length(housing_data$Pool.Area)
+table(housing_data$Pool.Area)
+hist(housing_data$Pool.Area)
+```
+### None of these homes have pool areas, nothing to do here.
+
+****************************************************************************
+## Variable: House Style
+### Style of the home based upon number of levels and whether or not finished.
+### 1Story	One story
+### 1.5Fin	One and one-half story: 2nd level finished
+### 1.5Unf	One and one-half story: 2nd level unfinished
+### 2Story	Two story
+### 2.5Fin	Two and one-half story: 2nd level finished
+### 2.5Unf	Two and one-half story: 2nd level unfinished
+### SFoyer	Split Foyer
+### SLvl	Split Level
+```{r}
+
+length(housing_data$House.Style)
+table(housing_data$House.Style)
+```
+
+```{r}
+plot(housing_data$House.Style, housing_data$SalePrice, main = "SalePrice v House Style")
+```
+```{r}
+x1<- mean(housing_data$SalePrice[housing_data$House.Style=="1.5Fin"])
+y1<-sd(housing_data$SalePrice[housing_data$House.Style=="1.5Fin"])
+
+x2<-mean(housing_data$SalePrice[housing_data$House.Style=="1Story"])
+y2<-sd(housing_data$SalePrice[housing_data$House.Style=="1Story"])
+
+x3<-mean(housing_data$SalePrice[housing_data$House.Style=="2.5Unf"])
+y3<-sd(housing_data$SalePrice[housing_data$House.Style=="2.5Unf"])
+
+x4<-mean(housing_data$SalePrice[housing_data$House.Style=="2Story"])
+y4<-sd(housing_data$SalePrice[housing_data$House.Style=="2Story"])
+
+x5<-mean(housing_data$SalePrice[housing_data$House.Style=="SFoyer"])
+y5<-sd(housing_data$SalePrice[housing_data$House.Style=="SFoyer"])
+
+x6<-mean(housing_data$SalePrice[housing_data$House.Style=="SLvl"])
+y6<-sd(housing_data$SalePrice[housing_data$House.Style=="SLvl"])
+
+xMeans <-c(x1, x2, x3, x4, x5, x6)
+yStdDev <- c(y1, y2, y3, y4, y5, y6)
+housetypes <- c("1.5Fin", "1Story", "2.5Unf", "2Story", "SFoyer", "SLvl")
+cbind(housetypes, xMeans,yStdDev)
+```
+
+****************************************************************************
+## Variable: Roof.Style
+### Meaning: Style of roof category
+### Flat	Flat
+### Gable	Gable
+### Gambrel	Gabrel (Barn)
+### Hip	Hip
+### Mansard	Mansard
+### Shed	Shed
+```{r}
+typeof(housing_data$Roof.Style)
+length(housing_data$Roof.Style)
+table(housing_data$Roof.Style)
+```
+
+```{r}
+plot(housing_data$Roof.Style, housing_data$SalePrice, main= "SalePrice v Roof.Style")
+```
+### Note vast majority are Gable roofs, probably have issues with low number of shed, Mansard, Gambrel, and Flat roofs.
+
+```{r}
+xx1<- mean(housing_data$SalePrice[housing_data$Roof.Style=="Flat"])
+yy1<-sd(housing_data$SalePrice[housing_data$Roof.Style=="Flat"])
+
+xx2<-mean(housing_data$SalePrice[housing_data$Roof.Style=="Gable"])
+yy2<-sd(housing_data$SalePrice[housing_data$Roof.Style=="Gable"])
+
+xx3<-mean(housing_data$SalePrice[housing_data$Roof.Style=="Gambrel"])
+yy3<-sd(housing_data$SalePrice[housing_data$Roof.Style=="Gambrel"])
+
+xx4<-mean(housing_data$SalePrice[housing_data$Roof.Style=="Hip"])
+yy4<-sd(housing_data$SalePrice[housing_data$Roof.Style=="Hip"])
+
+xx5<-mean(housing_data$SalePrice[housing_data$Roof.Style=="Mansard"])
+yy5<-sd(housing_data$SalePrice[housing_data$Roof.Style=="Mansard"])
+
+xx6<-mean(housing_data$SalePrice[housing_data$Roof.Style=="Shed"])
+yy6<-sd(housing_data$SalePrice[housing_data$Roof.Style=="Shed"])
+
+xxMeans <-c(xx1, xx2, xx3, xx4, xx5, xx6)
+yyStdDev <- c(yy1, yy2, yy3, yy4, yy5, yy6)
+housetypes <- c("Flat", "Gable", "Gambrel", "Hip", "Mansard", "Shed")
+cbind(housetypes, xxMeans,yyStdDev)
+```
+
+### Mean is about the same, some high values with Hip roof, but probably nothing statistically significant due to low number of observations for most values.
+
+****************************************************************************
+## Variable: Roof.Matl
+### Meaning: Material of roofing material
+### ClyTile	Clay or Tile
+### CompShg	Standard (Composite) Shingle
+### Membran	Membrane
+### Metal	Metal
+### Roll	Roll
+### Tar&Grv	Gravel & Tar
+### WdShake	Wood Shakes
+### WdShngl	Wood Shingles
+```{r}
+typeof(housing_data$Roof.Matl)
+length(housing_data$Roof.Matl)
+table(housing_data$Roof.Matl)
+```
+### They are almost all CompShg, no need to go further since no variation
+
+****************************************************************************
+## Variable: Paved.Drive
+### Meaning: Type of driveway leading to home.
+### Y	Paved 
+### P	Partial Pavement
+### N	Dirt/Gravel
+```{r}
+typeof(housing_data$Paved.Drive)
+length(housing_data$Paved.Drive)
+table(housing_data$Paved.Drive)
+```
+
+```{r}
+plot(housing_data$Paved.Drive, housing_data$SalePrice, main = "SalePrice vs Paved.Drive")
+```
+### Not too surprising, the mean increases with a paved drive.
+```{r}
+ModelPavedDrive<- lm(SalePrice~ Paved.Drive, data= housing_data)
+plot(ModelPavedDrive)
+```
+### Not really sure how to interpret these, suggestions?
+
+****************************************************************************
+## Variable: Pool QC
+### Meaning: Quality of pool
+```{r}
+typeof(housing_data$Pool.QC)
+length(housing_data$Pool.QC)
+table(housing_data$Pool.QC)
+sum(is.na(housing_data$Pool.QC))
+```
+### no data
+
+****************************************************************************
+## Variable: Fence
+### Meaning: Type and quality of fencing
+###  GdPrv	Good Privacy
+###  MnPrv	Minimum Privacy
+###  GdWo	Good Wood
+###  MnWw	Minimum Wood/Wire
+###  NA	    No Fence
+```{r}
+typeof(housing_data$Fence)
+length(housing_data$Fence)
+table(housing_data$Fence)
+levels(housing_data$Fence)
+sum(is.na(housing_data$Fence))
+```
+
+```{r}
+plot(housing_data$Fence, housing_data$SalePrice, "SalePrice vs Fence Type", col="Blue")
+```
+### Not enough data to make this meaningful.
+
+
+
+
+
+
+
+
+
+
+
+
+
